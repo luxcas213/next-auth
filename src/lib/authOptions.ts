@@ -11,10 +11,11 @@ export const authOptions = {
     }),
   ],
   session: {
-    strategy: "database",
+    strategy: "database" as const,
   },
   callbacks: {
-    async session({ session, user }: { session: any; user: any }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, user }: any) {
       session.user.id = user.id;
       return session;
     },
