@@ -43,6 +43,8 @@ model User {
   email         String?   @unique
   emailVerified DateTime? @map("email_verified")
   image         String?
+  password      String?   // Nueva contraseña opcional
+  hasSetPassword Boolean  @default(false) // Indica si ya configuró contraseña
   accounts      Account[]
   sessions      Session[]
  

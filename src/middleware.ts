@@ -1,70 +1,159 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { ROUTES } from "@/lib/constants"
 
+import {
+  getSessionToken,
+  validateSessionWithDatabase,
+  determineMiddlewareAction,
+  createMiddlewareContext,
+  logMiddlewareEvent
+} from "@/lib/middleware-utils"
+
+import type { MiddlewareContext } from "@/types/middleware"
+
+/**
+ * Creates a redirect response to login page with callback URL
+ */
+function createRedirectToLogin(req: NextRequest): NextResponse {
+  const loginUrl = new URL(ROUTES.LOGIN, req.url)
+  loginUrl.searchParams.set("callbackUrl", req.url)
+  return NextResponse.redirect(loginUrl)
+}
+
+/**
+ * Creates a redirect response to home page
+ */
+function createRedirectToHome(req: NextRequest): NextResponse {
+  return NextResponse.redirect(new URL(ROUTES.HOME, req.url))
+}
+
+/**
+ * Creates a redirect response to set password page
+ */
+function createRedirectToSetPassword(req: NextRequest): NextResponse {
+  return NextResponse.redirect(new URL(ROUTES.SET_PASSWORD, req.url))
+}
+
+/**
+ * Main middleware function that handles authentication and routing
+ */
 export default async function middleware(req: NextRequest) {
-  console.log("Middleware ejecutado para:", req.nextUrl.pathname)
+  const startTime = performance.now()
+  const context: MiddlewareContext = createMiddlewareContext(req)
   
+  logMiddlewareEvent('info', 'Middleware execution started', { 
+    pathname: context.pathname,
+    userAgent: context.userAgent 
+  })
+
   try {
-    // Verificar si hay session en cookies
-    console.log("🔍 Verificando session token en cookies")
-    const sessionToken = req.cookies.get('next-auth.session-token')?.value || 
-                        req.cookies.get('__Secure-next-auth.session-token')?.value
-
-
-    // si no hay redirigir
-    if (!sessionToken) {
-      console.log("❌ Sin session token, redirigiendo a login")
-      const loginUrl = new URL("/login", req.url)
-      loginUrl.searchParams.set("callbackUrl", req.url)
-      return NextResponse.redirect(loginUrl)
-    }
-
+    // 1. Extract session token from cookies
+    context.sessionToken = getSessionToken(req)
     
-    try {
-      // verificar la session con la db
-      console.log("🔍 Verificando session en la base de datos")
-      const sessionResponse = await fetch(new URL('/api/auth/session', req.url), {
-        headers: {
-          cookie: req.headers.get('cookie') || ''
-        }
-      })
-
-      //si la respuesta no es ok, redirigir 
-      if (!sessionResponse.ok) {
-        console.log("❌ Error al verificar sesión, status:", sessionResponse.status)
-        const loginUrl = new URL("/login", req.url)
-        loginUrl.searchParams.set("callbackUrl", req.url)
-        return NextResponse.redirect(loginUrl)
-      }
-
-      const session = await sessionResponse.json()
-      
-      // si no hay session o user, redirigir
-      if (!session || !session.user) {
-        console.log("❌ Sesión inválida o expirada")
-        const loginUrl = new URL("/login", req.url)
-        loginUrl.searchParams.set("callbackUrl", req.url)
-        return NextResponse.redirect(loginUrl)
-      }
-
-      // si hay session, continuar
-      console.log("✅ Sesión válida para usuario:", session.user.email)
-      return NextResponse.next()
-    } catch (fetchError) {
-
-      //si hay error redirigir
-      console.error("❌ Error al verificar sesión con la base de datos:", fetchError)
-      const loginUrl = new URL("/login", req.url)
-      loginUrl.searchParams.set("callbackUrl", req.url)
-      return NextResponse.redirect(loginUrl)
+    if (context.sessionToken) {
+      logMiddlewareEvent('debug', 'Session token found', { pathname: context.pathname })
+    } else {
+      logMiddlewareEvent('debug', 'No session token found', { pathname: context.pathname })
     }
+
+    // 2. Validate session with database if token exists
+    if (context.sessionToken) {
+      const validationResult = await validateSessionWithDatabase(req)
+      
+      if (!validationResult.isValid) {
+        logMiddlewareEvent('warn', 'Session validation failed', { 
+          pathname: context.pathname,
+          error: validationResult.error 
+        })
+      } else {
+        context.session = validationResult.session
+        logMiddlewareEvent('debug', 'Session validated successfully', { 
+          pathname: context.pathname,
+          userId: context.session?.user.id,
+          userEmail: context.session?.user.email,
+          hasSetPassword: context.session?.user.hasSetPassword
+        })
+      }
+    }
+
+    // 3. Determine action based on context
+    const action = determineMiddlewareAction(context)
+    
+    // 4. Execute action
+    let response: NextResponse
+    
+    switch (action) {
+      case 'allow':
+        logMiddlewareEvent('debug', 'Access allowed', { pathname: context.pathname })
+        response = NextResponse.next()
+        break
+        
+      case 'redirect_login':
+        logMiddlewareEvent('info', 'Redirecting to login', { 
+          pathname: context.pathname,
+          reason: !context.sessionToken ? 'no_token' : 'invalid_session'
+        })
+        response = createRedirectToLogin(req)
+        break
+        
+      case 'redirect_home':
+        logMiddlewareEvent('info', 'Redirecting to home', { 
+          pathname: context.pathname,
+          reason: 'user_has_password'
+        })
+        response = createRedirectToHome(req)
+        break
+        
+      case 'redirect_set_password':
+        logMiddlewareEvent('info', 'Redirecting to set password', { 
+          pathname: context.pathname,
+          userId: context.session?.user.id
+        })
+        response = createRedirectToSetPassword(req)
+        break
+        
+      default:
+        logMiddlewareEvent('error', 'Unknown middleware action', { 
+          pathname: context.pathname,
+          action 
+        })
+        response = createRedirectToLogin(req)
+    }
+
+    const endTime = performance.now()
+    logMiddlewareEvent('info', 'Middleware execution completed', {
+      pathname: context.pathname,
+      action,
+      duration: `${(endTime - startTime).toFixed(2)}ms`
+    })
+
+    return response
 
   } catch (error) {
-    console.error("💥 Error en middleware:", error)
-    return NextResponse.redirect(new URL("/login", req.url))
+    const endTime = performance.now()
+    logMiddlewareEvent('error', 'Middleware execution failed', {
+      pathname: context.pathname,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      duration: `${(endTime - startTime).toFixed(2)}ms`
+    })
+    
+    return createRedirectToLogin(req)
   }
 }
 
+/**
+ * Middleware configuration
+ * Matches all routes except static assets and API routes
+ */
 export const config = {
-  matcher: ['/secure', "/secure/:path*"]
+  matcher: [
+    // Include all routes except:
+    // - API routes (handled by Next.js)
+    // - Static files (_next/static)
+    // - Images (_next/image)
+    // - Favicon and other static assets
+    '/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)',
+  ]
 }
