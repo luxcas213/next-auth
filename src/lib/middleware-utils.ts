@@ -96,18 +96,18 @@ export function determineMiddlewareAction(
   // If session token exists but session is invalid, clear cookies and redirect to login
   if (sessionToken && !session) return "clear_cookies_and_redirect_login";
 
+  // Check if user is on home page without password set
+  if (isPublicRoute(pathname)  && session && !session.user.hasSetPassword)
+    return "redirect_set_password";
+
   // Check if route is public (no authentication required)
-  if (isPublicRoute(pathname)) return "allow";
+  if (isPublicRoute(pathname) ) return "allow";
 
   // Check if user has session token
   if (!sessionToken) return "redirect_login";
 
   // Check if session is valid
   if (!session) return "redirect_login";
-
-  // Check if user is on home page without password set
-  if (pathname === "/" && !session.user.hasSetPassword)
-    return "redirect_set_password";
 
   // Check if user is on home page with password already set
   if (pathname === "/" && session.user.hasSetPassword) return "allow";
