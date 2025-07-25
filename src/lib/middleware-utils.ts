@@ -19,7 +19,7 @@ export function getSessionToken(req: NextRequest): string | undefined {
  * Checks if the route is public and doesn't require authentication
  */
 export function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.includes(pathname as any);
+  return PUBLIC_ROUTES.includes(pathname as typeof PUBLIC_ROUTES[number]);
 }
 
 /**
@@ -147,7 +147,7 @@ export function createMiddlewareContext(req: NextRequest): MiddlewareContext {
 export function logMiddlewareEvent(
   level: "info" | "warn" | "error" | "debug",
   message: string,
-  context: Partial<MiddlewareContext> & { [key: string]: any } = {}
+  context: Partial<MiddlewareContext> & Record<string, unknown> = {}
 ): void {
   const logData = {
     timestamp: new Date().toISOString(),
