@@ -94,7 +94,7 @@ export function determineMiddlewareAction(
   const { pathname, sessionToken, session } = context;
 
   // Check if route is public (no authentication required)
-  if (isPublicRoute(pathname)) return "allow";
+  if (isPublicRoute(pathname) && !sessionToken) return "allow";
 
   // Check if user has session token
   if (!sessionToken) return "redirect_login";
