@@ -61,7 +61,7 @@ export default function SetPasswordPage() {
         const data = await response.json();
         setError(data.error || "Error al configurar la contraseña");
       }
-    } catch (error) {
+    } catch {
       setError("Error de conexión");
     } finally {
       setLoading(false);

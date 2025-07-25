@@ -21,7 +21,7 @@ export const authOptions = {
       return session;
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async signIn({ user, account, profile }: any) {
+    async signIn() {
       // Permitir el sign in
       return true;
     },
