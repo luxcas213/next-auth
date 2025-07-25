@@ -20,7 +20,6 @@ export const authOptions = {
       session.user.hasSetPassword = user.hasSetPassword;
       return session;
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async signIn() {
       // Permitir el sign in
       return true;

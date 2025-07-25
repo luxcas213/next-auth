@@ -7,6 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "pre-deploy": "npm run lint && npm run type-check && npm run build",
     "postinstall": "prisma generate"
   },
   "dependencies": {
