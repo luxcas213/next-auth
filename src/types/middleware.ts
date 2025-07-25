@@ -30,4 +30,4 @@ export interface MiddlewareConfig {
   sessionCookieNames: readonly string[]
 }
 
-export type MiddlewareResult = 'allow' | 'redirect_login' | 'redirect_home' | 'redirect_set_password'
+export type MiddlewareResult = 'allow' | 'redirect_login' | 'redirect_home' | 'redirect_set_password' | 'clear_cookies_and_redirect_login'

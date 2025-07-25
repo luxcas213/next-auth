@@ -19,7 +19,7 @@ export function getSessionToken(req: NextRequest): string | undefined {
  * Checks if the route is public and doesn't require authentication
  */
 export function isPublicRoute(pathname: string): boolean {
-  return (PUBLIC_ROUTES as readonly string[]).includes(pathname);
+  return PUBLIC_ROUTES.includes(pathname as any);
 }
 
 /**
@@ -79,13 +79,13 @@ export async function validateSessionWithDatabase(
 
 /**
  * Determines the middleware action based on context
- * 
+ *
  * FLOW:
  * 1. Public routes → Allow access
  * 2. No session token → Redirect to login
  * 3. Invalid session → Redirect to login
- * 4. Valid session + no password set → Redirect to set-password 
- * 5. Valid session + password set → Allow access 
+ * 4. Valid session + no password set → Redirect to set-password
+ * 5. Valid session + password set → Allow access
  * 6. Default → Allow access to protected routes
  */
 export function determineMiddlewareAction(
@@ -93,8 +93,11 @@ export function determineMiddlewareAction(
 ): MiddlewareResult {
   const { pathname, sessionToken, session } = context;
 
+  // If session token exists but session is invalid, clear cookies and redirect to login
+  if (sessionToken && !session) return "clear_cookies_and_redirect_login";
+
   // Check if route is public (no authentication required)
-  if (isPublicRoute(pathname) && !sessionToken) return "allow";
+  if (isPublicRoute(pathname)) return "allow";
 
   // Check if user has session token
   if (!sessionToken) return "redirect_login";
@@ -103,19 +106,22 @@ export function determineMiddlewareAction(
   if (!session) return "redirect_login";
 
   // Check if user is on home page without password set
-  if(pathname === "/" && !session.user.hasSetPassword) return "redirect_set_password";
+  if (pathname === "/" && !session.user.hasSetPassword)
+    return "redirect_set_password";
 
   // Check if user is on home page with password already set
-  if(pathname === "/" && session.user.hasSetPassword) return "allow";
+  if (pathname === "/" && session.user.hasSetPassword) return "allow";
 
   // Check if user is on set-password page without password set
-  if (pathname === "/set-password" && !session.user.hasSetPassword) return "allow";
+  if (pathname === "/set-password" && !session.user.hasSetPassword)
+    return "allow";
 
   // Check if user has no password set (redirect to set password)
   if (!session.user.hasSetPassword) return "redirect_set_password";
 
   // Check if user with password is trying to access set-password page
-  if (pathname === "/set-password" && session.user.hasSetPassword) return "redirect_home";
+  if (pathname === "/set-password" && session.user.hasSetPassword)
+    return "redirect_home";
 
   return "allow";
 }
@@ -141,7 +147,7 @@ export function createMiddlewareContext(req: NextRequest): MiddlewareContext {
 export function logMiddlewareEvent(
   level: "info" | "warn" | "error" | "debug",
   message: string,
-  context: Partial<MiddlewareContext> & Record<string, unknown> = {}
+  context: Partial<MiddlewareContext> & { [key: string]: any } = {}
 ): void {
   const logData = {
     timestamp: new Date().toISOString(),

@@ -22,6 +22,37 @@ function createRedirectToLogin(req: NextRequest): NextResponse {
 }
 
 /**
+ * Creates a redirect response to login page and clears session cookies
+ */
+function createRedirectToLoginWithClearedCookies(req: NextRequest): NextResponse {
+  const loginUrl = new URL(ROUTES.LOGIN, req.url)
+  loginUrl.searchParams.set("callbackUrl", req.url)
+  const response = NextResponse.redirect(loginUrl)
+  
+  // Clear all session cookies
+  const cookieNames = [
+    'next-auth.session-token',
+    '__Secure-next-auth.session-token',
+    'next-auth.csrf-token',
+    '__Secure-next-auth.csrf-token',
+    'next-auth.callback-url',
+    '__Secure-next-auth.callback-url'
+  ]
+  
+  cookieNames.forEach(cookieName => {
+    response.cookies.set(cookieName, '', {
+      expires: new Date(0),
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    })
+  })
+  
+  return response
+}
+
+/**
  * Creates a redirect response to home page
  */
 function createRedirectToHome(req: NextRequest): NextResponse {
@@ -95,6 +126,14 @@ export default async function middleware(req: NextRequest) {
           reason: !context.sessionToken ? 'no_token' : 'invalid_session'
         })
         response = createRedirectToLogin(req)
+        break
+
+      case 'clear_cookies_and_redirect_login':
+        logMiddlewareEvent('info', 'Clearing cookies and redirecting to login', { 
+          pathname: context.pathname,
+          reason: 'invalid_session_with_token'
+        })
+        response = createRedirectToLoginWithClearedCookies(req)
         break
         
       case 'redirect_home':
